@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/.next",
+  "env": {
+    "TEACHER_NAME": "Bhargav_Appasani",
+    "TEACHER_PASSWORD": "GOODexample1!",
+    "supabaseUrl": "https://hbuvymtwcclqltjmqhdk.supabase.co",
+    "supabaseKey": ""
+  }
+}
+

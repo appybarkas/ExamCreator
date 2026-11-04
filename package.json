@@ -1,0 +1,23 @@
+{
+  "name": "exam-creator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ultra-modern secure examination platform with fullscreen lockdown and Supabase integration",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start",
+    "test": "node scripts/test-exam.mjs"
+  },
+  "keywords": [
+    "exam",
+    "quiz",
+    "proctoring",
+    "nextjs",
+    "supabase",
+    "lockdown"
+  ],
+  "author": "Bhargav Appasani",
+  "license": "MIT"
+}
+
