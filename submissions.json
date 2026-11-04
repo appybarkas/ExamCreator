@@ -1,0 +1,11 @@
+{
+  "Bhargav": {
+    "score": 4,
+    "quiz_status": 1
+  },
+  "Amulya": {
+    "score": 4,
+    "quiz_status": 1,
+    "violations": 4
+  }
+}
