@@ -80,7 +80,7 @@ export function getAppConfig(): EnvConfig {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     loadedVars['supabaseUrl'] ||
     loadedVars['SUPABASE_URL'] ||
-    'https://hbuvymtwcclqltjmqhdk.supabase.co';
+    '';
 
   const supabaseKey =
     process.env.supabaseKey ||
