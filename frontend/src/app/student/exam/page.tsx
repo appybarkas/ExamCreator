@@ -595,7 +595,7 @@ export default function StudentExamPage() {
           >
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>
-              Violations: <strong className="font-mono text-white">{violations}</strong>/3
+              Violations: <strong className="font-mono text-white">{violations}</strong>/Violation_threshold
             </span>
           </div>
         </div>
