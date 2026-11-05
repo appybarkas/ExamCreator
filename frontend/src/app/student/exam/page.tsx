@@ -20,7 +20,7 @@ import { StudentQuizQuestion, StudentRecord } from '@/lib/types';
 
 export default function StudentExamPage() {
   const router = useRouter();
-
+  const Violation_threshold:number = 2;
   const [student, setStudent] = useState<StudentRecord | null>(null);
   const [questions, setQuestions] = useState<StudentQuizQuestion[]>([]);
   const [title, setTitle] = useState('Secure Examination');
@@ -285,21 +285,21 @@ export default function StudentExamPage() {
       }
 
       // Check violation threshold
-      if (newViolations > 3) {
+      if (newViolations > Violation_threshold) {
         setAutoSubmitReason(
-          `Security violations exceeded the maximum limit of 3 (${newViolations} total violations recorded). Exam has been autosubmitted.`
+          `Security violations exceeded the maximum limit of ${Violation_threshold} (${newViolations} total violations recorded). Exam has been autosubmitted.`
         );
         setWarningTitle('VIOLATIONS EXCEEDED (EXAM AUTOSUBMITTING)');
         setWarningMessage(
-          `You have committed ${newViolations} violations. Maximum limit (3) exceeded. Your quiz is being automatically submitted now!`
+          `You have committed ${newViolations} violations. Maximum limit (${Violation_threshold}) exceeded. Your quiz is being automatically submitted now!`
         );
         setShowWarningModal(true);
         submitExam(true, newViolations);
       } else {
-        const remaining = 3 - newViolations;
-        setWarningTitle(`SECURITY WARNING (${newViolations} OF 3)`);
+        const remaining = Violation_threshold - newViolations;
+        setWarningTitle(`SECURITY WARNING (${newViolations} OF ${Violation_threshold})`);
         setWarningMessage(
-          `${reason} You have ${remaining} violation${remaining === 1 ? '' : 's'} remaining. If violations exceed 3, your quiz will be automatically submitted!`
+          `${reason} You have ${remaining} violation${remaining === 1 ? '' : 's'} remaining. If violations exceed ${Violation_threshold}, your quiz will be automatically submitted!`
         );
         setShowWarningModal(true);
       }
