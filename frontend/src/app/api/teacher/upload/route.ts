@@ -57,7 +57,7 @@ export async function POST(request: Request) {
           return NextResponse.json({
             success: true,
             count: parsed.length,
-            message: `Successfully uploaded ${parsed.length} questions to ./frontend/quiz.json`,
+            message: `Successfully uploaded ${parsed.length} questions`,
             questions: parsed,
           });
         } catch {
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       count: questionsRaw.length,
-      message: `Successfully saved ${questionsRaw.length} questions to ./frontend/quiz.json`,
+      message: `Successfully saved ${questionsRaw.length} questions`,
       questions: questionsRaw,
     });
   } catch (err) {
