@@ -101,7 +101,7 @@ export default function TeacherLoginPage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Bhargav_Appasani"
+                  placeholder="e.g. Rama_Krishna"
                   className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm placeholder:text-slate-500"
                 />
               </div>
