@@ -2,45 +2,22 @@ import fs from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
 import { QuizQuestion, StudentQuizQuestion, QuizConfig } from './types';
+import os from 'os';
 
 export function getQuizZipFilePath(): string {
-  if (process.cwd().endsWith('frontend')) {
-    return path.join(process.cwd(), 'quiz.zip');
-  }
-  const inFrontend = path.join(process.cwd(), 'frontend', 'quiz.zip');
-  if (fs.existsSync(path.dirname(inFrontend))) {
-    return inFrontend;
-  }
-  return path.join(process.cwd(), 'quiz.zip');
+  return path.join(os.tmpdir(), 'quiz.zip');
 }
 
 export function getQuizFilePath(): string {
-  if (process.cwd().endsWith('frontend')) {
-    return path.join(process.cwd(), 'quiz.json');
-  }
-  const inFrontend = path.join(process.cwd(), 'frontend', 'quiz.json');
-  if (fs.existsSync(path.dirname(inFrontend))) {
-    return inFrontend;
-  }
-  return path.join(process.cwd(), 'quiz.json');
+  return path.join(os.tmpdir(), 'quiz.json');
 }
 
 export function getConfigFilePath(): string {
-  if (process.cwd().endsWith('frontend')) {
-    return path.join(process.cwd(), 'quiz_config.json');
-  }
-  const inFrontend = path.join(process.cwd(), 'frontend', 'quiz_config.json');
-  if (fs.existsSync(path.dirname(inFrontend))) {
-    return inFrontend;
-  }
-  return path.join(process.cwd(), 'quiz_config.json');
+  return path.join(os.tmpdir(), 'quiz_config.json');
 }
 
 export function getFiguresDir(): string {
-  if (process.cwd().endsWith('frontend')) {
-    return path.join(process.cwd(), 'public', 'figures');
-  }
-  return path.join(process.cwd(), 'frontend', 'public', 'figures');
+  return path.join(os.tmpdir(), 'figures');
 }
 
 /**
