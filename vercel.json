@@ -7,7 +7,6 @@
   "env": {
     "TEACHER_NAME": "Bhargav_Appasani",
     "TEACHER_PASSWORD": "GOODexample1!",
-    "supabaseUrl": "https://hbuvymtwcclqltjmqhdk.supabase.co",
-    "supabaseKey": ""
+    "supabaseUrl": "https://hbuvymtwcclqltjmqhdk.supabase.co"
   }
 }
