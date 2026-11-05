@@ -110,7 +110,7 @@ export default function StudentLoginPage() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. Bhargav"
+                  placeholder="e.g. Rama"
                   className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm placeholder:text-slate-500"
                 />
               </div>
