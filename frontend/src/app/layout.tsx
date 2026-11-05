@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Exam Creator | Secure Fullscreen Assessment Platform',
-  description: 'Ultra-modern proctored quiz and assessment platform with fullscreen lockdown.',
+  title: 'KIIT Exam Creator | Secure Fullscreen Assessment Platform',
+  description: 'Proctored assessment platform with fullscreen lockdown.',
 };
 
 export default function RootLayout({
