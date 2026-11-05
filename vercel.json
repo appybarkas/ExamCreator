@@ -3,10 +3,5 @@
   "framework": "nextjs",
   "rootDirectory": "frontend",
   "buildCommand": "npm install && npm run build",
-  "outputDirectory": ".next",
-  "env": {
-    "TEACHER_NAME": "Bhargav_Appasani",
-    "TEACHER_PASSWORD": "GOODexample1!",
-    "supabaseUrl": "https://hbuvymtwcclqltjmqhdk.supabase.co"
-  }
+  "outputDirectory": ".next"
 }
