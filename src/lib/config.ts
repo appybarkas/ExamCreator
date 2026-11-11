@@ -1,25 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 
-interface EnvConfig {
+export interface EnvConfig {
   TEACHER_NAME: string;
   TEACHER_PASSWORD: string;
   supabaseUrl: string;
   supabaseKey: string;
 }
 
-let cachedConfig: EnvConfig | null = null;
-
-export function getAppConfig(): EnvConfig {
-  if (cachedConfig) {
-    return cachedConfig;
-  }
-
+export function getAppConfig(forceReload = false): EnvConfig {
   const loadedVars: Record<string, string> = {};
 
   // Check multiple potential locations for .env files
   const searchDirs = [
     process.cwd(),
+    path.resolve(process.cwd(), 'frontend'),
     path.resolve(process.cwd(), '..'),
     path.resolve(__dirname, '../../..'),
     path.resolve(__dirname, '../../../..'),
@@ -80,23 +75,25 @@ export function getAppConfig(): EnvConfig {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     loadedVars['supabaseUrl'] ||
     loadedVars['SUPABASE_URL'] ||
+    loadedVars['supabase_url'] ||
     '';
 
   const supabaseKey =
     process.env.supabaseKey ||
     process.env.SUPABASE_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
     loadedVars['supabaseKey'] ||
     loadedVars['SUPABASE_KEY'] ||
+    loadedVars['supabase_key'] ||
+    loadedVars['SUPABASE_SERVICE_ROLE_KEY'] ||
+    loadedVars['SUPABASE_ANON_KEY'] ||
     '';
 
-  cachedConfig = {
+  return {
     TEACHER_NAME,
     TEACHER_PASSWORD,
-    supabaseUrl,
-    supabaseKey,
+    supabaseUrl: supabaseUrl.trim(),
+    supabaseKey: supabaseKey.trim(),
   };
-
-  return cachedConfig;
 }
-

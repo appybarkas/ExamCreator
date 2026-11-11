@@ -207,19 +207,15 @@ async function runTests() {
     );
 
     console.log('\n--- TEST SUITE 7: Final Submission, Single Attempt & Database Score ---');
-    // Complete answers matching quiz.json
-    const completeAnswers = {
-      0: 'C',
-      1: 'D',
-      2: 'D',
-      3: 'D',
-      4: 'D',
-      5: 'D',
-      6: 'D',
-      7: 'D',
-      8: 'C',
-      9: 'D',
-    };
+    // Fetch loaded questions to construct 100% correct answers dynamically
+    const configQuestionsRes = await fetch(`${BASE_URL}/api/teacher/config`);
+    const configQuestionsData = await configQuestionsRes.json();
+    const completeAnswers = {};
+    if (configQuestionsData.questions) {
+      configQuestionsData.questions.forEach((q, idx) => {
+        completeAnswers[idx] = q.Answer || 'A';
+      });
+    }
 
     const finalSubmitRes = await fetch(`${BASE_URL}/api/student/submit`, {
       method: 'POST',
@@ -252,12 +248,18 @@ async function runTests() {
     );
 
     console.log('\n--- TEST SUITE 8: Autosubmit on Timer Zero ---');
+    const autoSubmitAnswers = {};
+    if (configQuestionsData.questions && configQuestionsData.questions.length >= 2) {
+      autoSubmitAnswers[0] = configQuestionsData.questions[0].Answer || 'A';
+      autoSubmitAnswers[1] = configQuestionsData.questions[1].Answer || 'A';
+    }
+
     const autoSubmitRes = await fetch(`${BASE_URL}/api/student/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'Amulya',
-        answers: { 0: 'C', 1: 'D' },
+        answers: autoSubmitAnswers,
         isAutoSubmit: true,
       }),
     });
@@ -289,8 +291,18 @@ async function runTests() {
       'Student quiz endpoint returns updated maxViolations (5) configured by teacher'
     );
 
-    console.log('\n--- TEST SUITE 10: Teacher Changes student quiz_status to 0 ---');
-    // Bhargav was previously locked out with quiz_status = 1
+    console.log('\n--- TEST SUITE 10: Teacher Changes student quiz_status to 0 (and resets violations) ---');
+    // Simulate candidate recording violations
+    await fetch(`${BASE_URL}/api/student/violation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Bhargav',
+        violations: 2,
+      }),
+    });
+
+    // Teacher resets student quiz_status to 0
     const resetStatusRes = await fetch(`${BASE_URL}/api/teacher/students`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,16 +313,19 @@ async function runTests() {
     });
     const resetStatusData = await resetStatusRes.json();
     assert(
-      resetStatusRes.ok && resetStatusData.success && resetStatusData.student.quiz_status === 0,
-      'Teacher can change quiz_status of any student to 0'
+      resetStatusRes.ok &&
+        resetStatusData.success &&
+        resetStatusData.student.quiz_status === 0 &&
+        resetStatusData.student.violations === 0,
+      'Teacher can change quiz_status of any student to 0, which also resets violations to 0'
     );
 
-    // Verify student status endpoint reflects status 0
+    // Verify student status endpoint reflects status 0 and violations 0
     const checkStatusRes = await fetch(`${BASE_URL}/api/student/status?username=Bhargav`);
     const checkStatusData = await checkStatusRes.json();
     assert(
-      checkStatusRes.ok && checkStatusData.quiz_status === 0,
-      'Student status query confirms quiz_status is 0'
+      checkStatusRes.ok && checkStatusData.quiz_status === 0 && checkStatusData.violations === 0,
+      'Student status query confirms quiz_status is 0 and violations are reset to 0'
     );
 
     // Candidate can now submit again!

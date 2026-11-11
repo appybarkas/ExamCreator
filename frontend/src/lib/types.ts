@@ -36,7 +36,6 @@ export interface QuizConfig {
   startTime: string; // ISO string or empty
   endTime: string;   // ISO string or empty
   totalQuestions: number;
-  maxViolations: number; // Configurable max allowed violations
   updatedAt: string;
 }
 
@@ -46,14 +45,13 @@ export interface StudentRecord {
   quiz: number | null;
   lab?: number | null;
   quiz_status?: number | null;
-  violations?: number | null;
+  violations?: number | null; // Optional historical field for backwards-compatibility with existing tables
 }
 
 export interface QuizSubmissionPayload {
   username: string;
   answers: Record<number, string>;
   isAutoSubmit?: boolean;
-  violations?: number;
 }
 
 export interface QuizResult {
@@ -61,5 +59,4 @@ export interface QuizResult {
   totalQuestions: number;
   username: string;
   submittedAt: string;
-  violations?: number;
 }

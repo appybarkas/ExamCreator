@@ -39,12 +39,12 @@ export default function TeacherDashboardPage() {
   const [title, setTitle] = useState('Computer Science Core Assessment');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [maxViolations, setMaxViolations] = useState<number>(3);
   const [isCreated, setIsCreated] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
 
   // Student table state
   const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; error: string | null } | null>(null);
   const [resettingUser, setResettingUser] = useState<string | null>(null);
 
   // UI status
@@ -81,11 +81,6 @@ export default function TeacherDashboardPage() {
           setTitle(configData.config.title || 'Computer Science Core Assessment');
           setStartTime(configData.config.startTime || '');
           setEndTime(configData.config.endTime || '');
-          setMaxViolations(
-            typeof configData.config.maxViolations === 'number' && configData.config.maxViolations > 0
-              ? configData.config.maxViolations
-              : 3
-          );
           setIsCreated(Boolean(configData.config.isCreated));
         }
         if (Array.isArray(configData.questions)) {
@@ -97,6 +92,9 @@ export default function TeacherDashboardPage() {
         const studentsData = await studentsRes.json();
         if (Array.isArray(studentsData.students)) {
           setStudents(studentsData.students);
+        }
+        if (studentsData.dbStatus) {
+          setDbStatus(studentsData.dbStatus);
         }
       }
     } catch (err) {
@@ -129,7 +127,6 @@ export default function TeacherDashboardPage() {
           title,
           startTime,
           endTime,
-          maxViolations: Number(maxViolations) || 3,
           isCreated: true, // Populated and fixed until updated with a new one
         }),
       });
@@ -172,13 +169,13 @@ export default function TeacherDashboardPage() {
         setStudents((prev) =>
           prev.map((s) =>
             s.username.toLowerCase() === username.toLowerCase()
-              ? { ...s, quiz_status: 0, violations: 0 }
+              ? { ...s, quiz_status: 0 }
               : s
           )
         );
         setFeedback({
           type: 'success',
-          message: `Candidate ${username}'s quiz_status changed to 0. They are now eligible to re-attempt the quiz.`,
+          message: `Candidate ${username}'s quiz_status has been reset to 0. They are now eligible to re-attempt the quiz.`,
         });
       } else {
         setFeedback({
@@ -627,7 +624,7 @@ export default function TeacherDashboardPage() {
                           onClick={() => handleResetStudentStatus(st.username)}
                           disabled={isResetting}
                           className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
-                          title="Set candidate quiz_status to 0 to allow re-attempt"
+                          title="Reset quiz_status and violations to 0 to allow re-attempt"
                         >
                           {isResetting ? (
                             <>
@@ -637,7 +634,7 @@ export default function TeacherDashboardPage() {
                           ) : (
                             <>
                               <RotateCcw className="w-3 h-3 text-amber-400" />
-                              <span>Set quiz_status to 0</span>
+                              <span>Reset Status & Violations to 0</span>
                             </>
                           )}
                         </button>

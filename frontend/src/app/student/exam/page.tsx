@@ -57,6 +57,7 @@ export default function StudentExamPage() {
 
   const violationsRef = useRef(0);
   violationsRef.current = violations;
+  const lastViolationTimeRef = useRef(0);
 
   // Web Audio Warning Beeper
   const playAlertSound = useCallback(() => {
@@ -94,9 +95,33 @@ export default function StudentExamPage() {
         return;
       }
       setStudent(parsed);
-      if (parsed.violations) {
-        setViolations(Number(parsed.violations));
-        violationsRef.current = Number(parsed.violations);
+      // Requirement: When teacher resets quiz_status to zero, violations also get set to zero
+      const initialViolations = parsed.quiz_status === 0 ? 0 : Number(parsed.violations || 0);
+      setViolations(initialViolations);
+      violationsRef.current = initialViolations;
+
+      // Realtime verify against server status
+      if (parsed.username) {
+        fetch(`/api/student/status?username=${encodeURIComponent(parsed.username)}`, { cache: 'no-store' })
+          .then((res) => res.json())
+          .then((statusData) => {
+            if (statusData.success) {
+              if (statusData.quiz_status === 1) {
+                router.push('/student/dashboard');
+                return;
+              }
+              const currentViolations = statusData.quiz_status === 0 ? 0 : Number(statusData.violations || 0);
+              setViolations(currentViolations);
+              violationsRef.current = currentViolations;
+              const updated = {
+                ...parsed,
+                quiz_status: statusData.quiz_status,
+                violations: currentViolations,
+              };
+              localStorage.setItem('student_session', JSON.stringify(updated));
+            }
+          })
+          .catch(() => {});
       }
     } catch {
       router.push('/student/login');
@@ -151,19 +176,10 @@ export default function StudentExamPage() {
       if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
         await document.documentElement.requestFullscreen();
       }
+      window.focus();
       if (typeof navigator !== 'undefined' && 'keyboard' in navigator) {
-        // @ts-expect-error Keyboard Lock API
-        navigator.keyboard?.lock?.([
-          'Escape',
-          'F11',
-          'Tab',
-          'AltLeft',
-          'AltRight',
-          'ControlLeft',
-          'ControlRight',
-          'MetaLeft',
-          'MetaRight',
-        ]);
+        // @ts-expect-error Keyboard Lock API (locks all keys so OS shortcuts and app switching cannot occur)
+        navigator.keyboard?.lock?.();
       }
       setIsFullscreen(true);
     } catch (err) {
@@ -333,7 +349,7 @@ export default function StudentExamPage() {
     return () => clearInterval(timer);
   }, [timerInitialized, submitted, submitExam]);
 
-  // 7. Strict Fullscreen and Keyboard Enforcement Handlers
+  // 7. Strict Fullscreen, Keyboard Lock & Mouse Confinement Handlers
   useEffect(() => {
     enterStrictFullscreen();
 
@@ -346,58 +362,56 @@ export default function StudentExamPage() {
           enterStrictFullscreen();
         }
       }
-    }, 350);
+    }, 250);
 
     const handleFullscreenChange = () => {
       const inFull = Boolean(document.fullscreenElement);
       setIsFullscreen(inFull);
       if (!inFull && !isSubmittedRef.current) {
-        handleSecurityViolation(
-          'Fullscreen exited! Continuous full-screen view is strictly enforced.'
-        );
+        enterStrictFullscreen();
+        const now = Date.now();
+        if (now - lastViolationTimeRef.current > 1500) {
+          lastViolationTimeRef.current = now;
+          handleSecurityViolation(
+            'Fullscreen exited! Continuous full-screen view is strictly enforced. No other application can be opened.'
+          );
+        }
       }
     };
 
-    // Strict keyboard capture: block Escape, F-keys, Tab, Alt+Tab, Ctrl combos, Meta
-    const handleKeyDown = (e: KeyboardEvent) => {
+    // Requirement: "Disable the inputs from Keyboard onec in full screen."
+    // All keyboard inputs are intercepted and blocked in fullscreen mode.
+    const handleKeyAll = (e: KeyboardEvent) => {
       if (isSubmittedRef.current) return;
 
-      const forbiddenKeys = [
-        'Escape',
-        'F1',
-        'F2',
-        'F3',
-        'F4',
-        'F5',
-        'F6',
-        'F7',
-        'F8',
-        'F9',
-        'F10',
-        'F11',
-        'F12',
-      ];
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
 
-      if (forbiddenKeys.includes(e.key) || e.keyCode === 27) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        handleSecurityViolation('Forbidden key shortcut attempted (Escape / Function Key).');
-        enterStrictFullscreen();
-        return false;
+      const now = Date.now();
+      if (now - lastViolationTimeRef.current > 1500) {
+        lastViolationTimeRef.current = now;
+        handleSecurityViolation(
+          'Keyboard input is disabled in fullscreen! All keystrokes are blocked. Please use mouse input within the fullscreen only.'
+        );
       }
+      enterStrictFullscreen();
+      return false;
+    };
 
-      // Block Ctrl / Meta / Alt combos
-      if (e.ctrlKey || e.metaKey || e.altKey) {
-        const lowerKey = e.key.toLowerCase();
-        const blockedChars = ['w', 't', 'n', 'r', 'u', 'p', 'i', 'j', 'c', 's', 'h', 'f', 'q'];
-        if (blockedChars.includes(lowerKey) || e.key === 'Tab') {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          handleSecurityViolation('Restricted shortcut key combination detected.');
-          return false;
+    // Requirement: "The mouse inpur also works withi the fullscreen."
+    // Mouse input works within the exam window. If cursor leaves the window/screen, trigger violation.
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (isSubmittedRef.current) return;
+      if (!e.relatedTarget && !('toElement' in e && (e as unknown as { toElement: unknown }).toElement)) {
+        const now = Date.now();
+        if (now - lastViolationTimeRef.current > 1500) {
+          lastViolationTimeRef.current = now;
+          handleSecurityViolation(
+            'Mouse pointer left the exam screen! Mouse input must remain within the fullscreen exam.'
+          );
         }
+        window.focus();
       }
     };
 
@@ -411,20 +425,33 @@ export default function StudentExamPage() {
       return false;
     };
 
+    // Requirement: "No other application can be opened when in full screen."
+    // Detect window blur / switching applications
     const handleBlur = () => {
       if (!isSubmittedRef.current) {
         window.focus();
-        handleSecurityViolation(
-          'Window blur detected! Switching tabs, windows, or applications is forbidden.'
-        );
+        enterStrictFullscreen();
+        const now = Date.now();
+        if (now - lastViolationTimeRef.current > 1500) {
+          lastViolationTimeRef.current = now;
+          handleSecurityViolation(
+            'Application switch detected! Opening or switching to other applications is strictly prohibited.'
+          );
+        }
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden && !isSubmittedRef.current) {
-        handleSecurityViolation(
-          'Tab switch detected! Leaving the assessment tab is strictly prohibited.'
-        );
+        window.focus();
+        enterStrictFullscreen();
+        const now = Date.now();
+        if (now - lastViolationTimeRef.current > 1500) {
+          lastViolationTimeRef.current = now;
+          handleSecurityViolation(
+            'Focus lost to another application! Leaving the fullscreen exam is strictly prohibited.'
+          );
+        }
       }
     };
 
@@ -443,13 +470,22 @@ export default function StudentExamPage() {
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    window.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('keyup', handleKeyDown, true);
+    window.addEventListener('keydown', handleKeyAll, true);
+    window.addEventListener('keyup', handleKeyAll, true);
+    window.addEventListener('keypress', handleKeyAll, true);
+    document.addEventListener('keydown', handleKeyAll, true);
+    document.addEventListener('keyup', handleKeyAll, true);
+    document.addEventListener('keypress', handleKeyAll, true);
+
+    document.documentElement.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('mouseout', handleMouseLeave);
+
     window.addEventListener('contextmenu', handleContextMenu, true);
     window.addEventListener('copy', handleCopyPaste, true);
     window.addEventListener('cut', handleCopyPaste, true);
     window.addEventListener('paste', handleCopyPaste, true);
     window.addEventListener('selectstart', handleCopyPaste, true);
+    window.addEventListener('dragstart', handleCopyPaste, true);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -458,13 +494,22 @@ export default function StudentExamPage() {
     return () => {
       clearInterval(fsCheckInterval);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('keydown', handleKeyDown, true);
-      window.removeEventListener('keyup', handleKeyDown, true);
+      window.removeEventListener('keydown', handleKeyAll, true);
+      window.removeEventListener('keyup', handleKeyAll, true);
+      window.removeEventListener('keypress', handleKeyAll, true);
+      document.removeEventListener('keydown', handleKeyAll, true);
+      document.removeEventListener('keyup', handleKeyAll, true);
+      document.removeEventListener('keypress', handleKeyAll, true);
+
+      document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('mouseout', handleMouseLeave);
+
       window.removeEventListener('contextmenu', handleContextMenu, true);
       window.removeEventListener('copy', handleCopyPaste, true);
       window.removeEventListener('cut', handleCopyPaste, true);
       window.removeEventListener('paste', handleCopyPaste, true);
       window.removeEventListener('selectstart', handleCopyPaste, true);
+      window.removeEventListener('dragstart', handleCopyPaste, true);
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);

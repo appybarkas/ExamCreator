@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
-import { getAllStudents, resetStudentQuizStatus, getStudentByUsername } from '@/lib/supabase';
+import {
+  getAllStudents,
+  resetStudentQuizStatus,
+  getStudentByUsername,
+  getDatabaseConnectionStatus,
+} from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const students = await getAllStudents();
+    const dbStatus = getDatabaseConnectionStatus();
     return NextResponse.json({
       success: true,
       students,
+      dbStatus,
     });
   } catch (err) {
     console.error('Students GET error:', err);
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Successfully set quiz_status for ${username} to ${targetStatus}`,
-      student: updatedStudent || { username, quiz_status: targetStatus, violations: 0 },
+      student: updatedStudent || { username, quiz_status: targetStatus },
     });
   } catch (err) {
     console.error('Student status update POST error:', err);

@@ -29,7 +29,6 @@ export async function GET(request: Request) {
       username: student.username,
       quiz: student.quiz,
       quiz_status: student.quiz_status ?? 0,
-      violations: student.violations ?? 0,
     });
   } catch (err) {
     console.error('Student status GET error:', err);

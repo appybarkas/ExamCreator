@@ -27,7 +27,6 @@ export async function GET() {
       title: config.title || 'Exam',
       startTime: config.startTime || null,
       endTime: config.endTime || null,
-      maxViolations: config.maxViolations || 3,
       totalQuestions: questions.length,
       questions,
     });

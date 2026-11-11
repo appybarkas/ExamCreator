@@ -225,15 +225,15 @@ export default function StudentDashboardPage() {
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-400">
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>Full screen is strictly enforced. If violations exceed {maxViolations}, the exam is automatically submitted.</span>
+              <span>Full screen is strictly enforced. No other application can be opened when in full screen.</span>
             </li>
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <Clock className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>Shortcut buttons like escape key, Alt+Tab, and function keys will NOT work.</span>
+              <span>Keyboard input is disabled in full screen. Mouse input works within fullscreen only.</span>
             </li>
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>You must answer all questions to submit the quiz, else submission is blocked.</span>
+              <span>You must answer all questions to submit. Auto-submits if violations exceed {maxViolations}.</span>
             </li>
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />

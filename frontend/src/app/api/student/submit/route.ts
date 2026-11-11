@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { username, answers, isAutoSubmit, violations } = body;
+    const { username, answers, isAutoSubmit } = body;
 
     if (!username) {
       return NextResponse.json(
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // Check if student has already submitted
     // Rule: "His quiz_status will become 1, indicating he has given the quiz and cannot give it again."
     const students = await getAllStudents();
-    const existing = students.find((s) => s.username === username);
+    const existing = students.find((s) => s.username.toLowerCase() === username.trim().toLowerCase());
     if (existing && existing.quiz_status === 1) {
       return NextResponse.json(
         {
@@ -62,9 +62,8 @@ export async function POST(request: Request) {
     // Each correct answer increases score by 1; no negative marking
     const { score } = gradeStudentSubmission(answers || {});
 
-    // Save total score and violations to table `student` under columns `quiz`, `quiz_status`, and `violations`
-    const violationsCount = Number(violations || 0);
-    await updateStudentScore(username, score, violationsCount);
+    // Save total score to table `student` under column `quiz` and set `quiz_status` to 1
+    await updateStudentScore(username.trim(), score);
 
     return NextResponse.json({
       success: true,
@@ -72,7 +71,6 @@ export async function POST(request: Request) {
       totalQuestions,
       username,
       quiz_status: 1,
-      violations: violationsCount,
       submittedAt: new Date().toISOString(),
       message: 'Exam submitted successfully.',
     });

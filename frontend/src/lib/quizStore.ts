@@ -273,7 +273,7 @@ export function getStudentQuestions(): StudentQuizQuestion[] {
 }
 
 /**
- * Get Quiz Configuration (start time, end time, maxViolations, isCreated status)
+ * Get Quiz Configuration (start time, end time, isCreated status)
  * The populated quiz is set fixed until it is updated with a new one.
  */
 export function getQuizConfig(): QuizConfig {
@@ -284,7 +284,6 @@ export function getQuizConfig(): QuizConfig {
     startTime: '',
     endTime: '',
     totalQuestions: defaultQuestions.length,
-    maxViolations: 3,
     updatedAt: new Date().toISOString(),
   };
 
@@ -299,10 +298,6 @@ export function getQuizConfig(): QuizConfig {
             ...defaultConfig,
             ...parsed,
             totalQuestions: defaultQuestions.length > 0 ? defaultQuestions.length : (parsed.totalQuestions || 0),
-            maxViolations:
-              typeof parsed.maxViolations === 'number' && parsed.maxViolations > 0
-                ? parsed.maxViolations
-                : 3,
             // The populated quiz remains fixed: once isCreated is true, it stays fixed
             isCreated: parsed.isCreated !== undefined ? Boolean(parsed.isCreated) : true,
           };
@@ -319,17 +314,13 @@ export function getQuizConfig(): QuizConfig {
 }
 
 /**
- * Save Quiz Configuration (stores maxViolations and persists across all locations)
+ * Save Quiz Configuration (persists across all locations)
  */
 export function saveQuizConfig(config: Partial<QuizConfig>): QuizConfig {
   const current = getQuizConfig();
   const updated: QuizConfig = {
     ...current,
     ...config,
-    maxViolations:
-      typeof config.maxViolations === 'number' && config.maxViolations > 0
-        ? config.maxViolations
-        : current.maxViolations || 3,
     updatedAt: new Date().toISOString(),
   };
 
