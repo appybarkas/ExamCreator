@@ -4,20 +4,108 @@ import AdmZip from 'adm-zip';
 import { QuizQuestion, StudentQuizQuestion, QuizConfig } from './types';
 import os from 'os';
 
+/**
+ * Returns candidate file paths across cwd, frontend/, parent, and os.tmpdir()
+ */
+function getCandidateFilePaths(fileName: string): string[] {
+  const list: string[] = [];
+  const cwd = process.cwd();
+
+  if (cwd.endsWith('frontend')) {
+    list.push(path.join(cwd, fileName));
+    list.push(path.join(cwd, '..', fileName));
+  } else {
+    list.push(path.join(cwd, 'frontend', fileName));
+    list.push(path.join(cwd, fileName));
+  }
+
+  list.push(path.join(os.tmpdir(), fileName));
+  return Array.from(new Set(list));
+}
+
+/**
+ * Find the first existing and non-empty file path
+ */
+export function findExistingFilePath(fileName: string): string {
+  const candidates = getCandidateFilePaths(fileName);
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      try {
+        const stat = fs.statSync(p);
+        if (stat.size > 0) return p;
+      } catch {
+        // Continue
+      }
+    }
+  }
+  return candidates[0];
+}
+
+/**
+ * Write content to all writeable locations so the quiz remains fixed and persistent
+ */
+export function writeToAllLocations(fileName: string, content: string | Buffer): void {
+  const candidates = getCandidateFilePaths(fileName);
+  let written = false;
+  for (const p of candidates) {
+    try {
+      const dir = path.dirname(p);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(p, content);
+      written = true;
+    } catch {
+      // Ignore read-only filesystem errors for certain paths
+    }
+  }
+  if (!written) {
+    const tmpPath = path.join(os.tmpdir(), fileName);
+    try {
+      fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
+      fs.writeFileSync(tmpPath, content);
+    } catch {
+      // Ignore
+    }
+  }
+}
+
 export function getQuizZipFilePath(): string {
-  return path.join(os.tmpdir(), 'quiz.zip');
+  return findExistingFilePath('quiz.zip');
 }
 
 export function getQuizFilePath(): string {
-  return path.join(os.tmpdir(), 'quiz.json');
+  return findExistingFilePath('quiz.json');
 }
 
 export function getConfigFilePath(): string {
-  return path.join(os.tmpdir(), 'quiz_config.json');
+  return findExistingFilePath('quiz_config.json');
+}
+
+export function getFigureDirs(): string[] {
+  const cwd = process.cwd();
+  const list: string[] = [];
+  if (cwd.endsWith('frontend')) {
+    list.push(path.join(cwd, 'public', 'figures'));
+    list.push(path.join(cwd, 'figures'));
+    list.push(path.join(cwd, '..', 'public', 'figures'));
+    list.push(path.join(cwd, '..', 'figures'));
+  } else {
+    list.push(path.join(cwd, 'frontend', 'public', 'figures'));
+    list.push(path.join(cwd, 'frontend', 'figures'));
+    list.push(path.join(cwd, 'public', 'figures'));
+    list.push(path.join(cwd, 'figures'));
+  }
+  list.push(path.join(os.tmpdir(), 'figures'));
+  return Array.from(new Set(list));
 }
 
 export function getFiguresDir(): string {
-  return path.join(os.tmpdir(), 'figures');
+  const possibleDirs = getFigureDirs();
+  for (const d of possibleDirs) {
+    if (fs.existsSync(d)) return d;
+  }
+  return possibleDirs[0];
 }
 
 /**
@@ -38,19 +126,13 @@ export function normalizeFigurePath(figPath?: string): string | undefined {
 
 /**
  * Process uploaded zip buffer:
- * 1. Saves to ./frontend/quiz.zip
+ * 1. Saves to ./frontend/quiz.zip (and mirrors to root and tmpdir)
  * 2. Extracts quiz.json and figures folder
+ * 3. Keeps the newly populated quiz fixed until updated
  */
 export function processQuizZip(zipBuffer: Buffer): { success: boolean; count: number; error?: string } {
   try {
-    const zipPath = getQuizZipFilePath();
-    const zipDir = path.dirname(zipPath);
-    if (!fs.existsSync(zipDir)) {
-      fs.mkdirSync(zipDir, { recursive: true });
-    }
-
-    // Save ./frontend/quiz.zip
-    fs.writeFileSync(zipPath, zipBuffer);
+    writeToAllLocations('quiz.zip', zipBuffer);
 
     // Extract using AdmZip
     const zip = new AdmZip(zipBuffer);
@@ -75,30 +157,34 @@ export function processQuizZip(zipBuffer: Buffer): { success: boolean; count: nu
       return { success: false, count: 0, error: 'quiz.json must contain a non-empty array of questions' };
     }
 
-    // Save quiz.json
-    const quizJsonPath = getQuizFilePath();
-    fs.writeFileSync(quizJsonPath, JSON.stringify(questionsRaw, null, 2), 'utf8');
+    // Save quiz.json (will persist across all locations and keep quiz populated/fixed)
+    saveQuizQuestions(questionsRaw as QuizQuestion[]);
 
-    // Extract figures to public/figures
-    const figuresDir = getFiguresDir();
-    if (!fs.existsSync(figuresDir)) {
-      fs.mkdirSync(figuresDir, { recursive: true });
-    }
+    // Extract figures to all candidate directories
+    const figureDirs = getFigureDirs();
 
-    // Also extract to frontend/figures just in case
-    const frontendFiguresDir = path.join(path.dirname(quizJsonPath), 'figures');
-    if (!fs.existsSync(frontendFiguresDir)) {
-      fs.mkdirSync(frontendFiguresDir, { recursive: true });
+    for (const d of figureDirs) {
+      try {
+        if (!fs.existsSync(d)) {
+          fs.mkdirSync(d, { recursive: true });
+        }
+      } catch {
+        // Ignore
+      }
     }
 
     for (const entry of zipEntries) {
       if (!entry.isDirectory && (entry.entryName.includes('figures/') || entry.entryName.includes('figures\\'))) {
         const fileName = path.basename(entry.entryName);
         if (fileName) {
-          const destFilePublic = path.join(figuresDir, fileName);
-          const destFileFrontend = path.join(frontendFiguresDir, fileName);
-          fs.writeFileSync(destFilePublic, entry.getData());
-          fs.writeFileSync(destFileFrontend, entry.getData());
+          const fileData = entry.getData();
+          for (const d of figureDirs) {
+            try {
+              fs.writeFileSync(path.join(d, fileName), fileData);
+            } catch {
+              // Ignore
+            }
+          }
         }
       }
     }
@@ -111,35 +197,44 @@ export function processQuizZip(zipBuffer: Buffer): { success: boolean; count: nu
 }
 
 /**
- * Load questions from ./frontend/quiz.json with full answers (server-side only)
+ * Load questions from quiz.json with full answers (server-side only).
+ * Returns the fixed populated quiz questions.
  */
 export function getFullQuizQuestions(): QuizQuestion[] {
-  const filePath = getQuizFilePath();
-  try {
-    if (fs.existsSync(filePath)) {
-      const data = fs.readFileSync(filePath, 'utf8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) {
-        return parsed;
+  const candidates = getCandidateFilePaths('quiz.json');
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        const data = fs.readFileSync(p, 'utf8');
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
+    } catch {
+      // Continue
     }
-  } catch (err) {
-    console.error('Error reading quiz.json:', err);
   }
   return [];
 }
 
 /**
- * Save new questions to ./frontend/quiz.json
+ * Save new questions to quiz.json.
+ * Keeps the populated quiz fixed until updated with a new one.
  */
 export function saveQuizQuestions(questions: QuizQuestion[]): boolean {
-  const filePath = getQuizFilePath();
   try {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(filePath, JSON.stringify(questions, null, 2), 'utf8');
+    const jsonStr = JSON.stringify(questions, null, 2);
+    writeToAllLocations('quiz.json', jsonStr);
+
+    // Update config to keep totalQuestions and fixed status in sync
+    const current = getQuizConfig();
+    saveQuizConfig({
+      ...current,
+      totalQuestions: questions.length,
+      isCreated: true, // Fixed and populated until updated with a new one
+      updatedAt: new Date().toISOString(),
+    });
     return true;
   } catch (err) {
     console.error('Error saving quiz.json:', err);
@@ -178,10 +273,10 @@ export function getStudentQuestions(): StudentQuizQuestion[] {
 }
 
 /**
- * Get Quiz Configuration (start time, end time, isCreated status)
+ * Get Quiz Configuration (start time, end time, maxViolations, isCreated status)
+ * The populated quiz is set fixed until it is updated with a new one.
  */
 export function getQuizConfig(): QuizConfig {
-  const filePath = getConfigFilePath();
   const defaultQuestions = getFullQuizQuestions();
   const defaultConfig: QuizConfig = {
     isCreated: true,
@@ -189,27 +284,33 @@ export function getQuizConfig(): QuizConfig {
     startTime: '',
     endTime: '',
     totalQuestions: defaultQuestions.length,
+    maxViolations: 3,
     updatedAt: new Date().toISOString(),
   };
 
-  try {
-    if (fs.existsSync(filePath)) {
-      const data = fs.readFileSync(filePath, 'utf8');
-      const parsed = JSON.parse(data);
-      return {
-        ...defaultConfig,
-        ...parsed,
-        totalQuestions: defaultQuestions.length,
-      };
-    } else {
-      const dir = path.dirname(filePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+  const candidates = getCandidateFilePaths('quiz_config.json');
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        const data = fs.readFileSync(p, 'utf8');
+        const parsed = JSON.parse(data);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            ...defaultConfig,
+            ...parsed,
+            totalQuestions: defaultQuestions.length > 0 ? defaultQuestions.length : (parsed.totalQuestions || 0),
+            maxViolations:
+              typeof parsed.maxViolations === 'number' && parsed.maxViolations > 0
+                ? parsed.maxViolations
+                : 3,
+            // The populated quiz remains fixed: once isCreated is true, it stays fixed
+            isCreated: parsed.isCreated !== undefined ? Boolean(parsed.isCreated) : true,
+          };
+        }
       }
-      fs.writeFileSync(filePath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+    } catch {
+      // Continue
     }
-  } catch (err) {
-    console.error('Error reading quiz_config.json:', err);
   }
 
   // Create initial default config if missing
@@ -218,27 +319,21 @@ export function getQuizConfig(): QuizConfig {
 }
 
 /**
- * Save Quiz Configuration
+ * Save Quiz Configuration (stores maxViolations and persists across all locations)
  */
 export function saveQuizConfig(config: Partial<QuizConfig>): QuizConfig {
   const current = getQuizConfig();
   const updated: QuizConfig = {
     ...current,
     ...config,
+    maxViolations:
+      typeof config.maxViolations === 'number' && config.maxViolations > 0
+        ? config.maxViolations
+        : current.maxViolations || 3,
     updatedAt: new Date().toISOString(),
   };
 
-  const filePath = getConfigFilePath();
-  try {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Error saving quiz_config.json:', err);
-  }
-
+  writeToAllLocations('quiz_config.json', JSON.stringify(updated, null, 2));
   return updated;
 }
 

@@ -20,7 +20,8 @@ import { StudentQuizQuestion, StudentRecord } from '@/lib/types';
 
 export default function StudentExamPage() {
   const router = useRouter();
-  const Violation_threshold:number = 2;
+  const [maxViolations, setMaxViolations] = useState<number>(3);
+  const maxViolationsRef = useRef<number>(3);
   const [student, setStudent] = useState<StudentRecord | null>(null);
   const [questions, setQuestions] = useState<StudentQuizQuestion[]>([]);
   const [title, setTitle] = useState('Secure Examination');
@@ -88,7 +89,7 @@ export default function StudentExamPage() {
     }
     try {
       const parsed = JSON.parse(rawSession);
-      if (parsed.quiz_status === 1 || (parsed.quiz !== null && parsed.quiz !== undefined && parsed.quiz > 0)) {
+      if (parsed.quiz_status === 1) {
         router.push('/student/dashboard');
         return;
       }
@@ -117,6 +118,10 @@ export default function StudentExamPage() {
 
         setQuestions(data.questions);
         if (data.title) setTitle(data.title);
+        if (typeof data.maxViolations === 'number' && data.maxViolations > 0) {
+          setMaxViolations(data.maxViolations);
+          maxViolationsRef.current = data.maxViolations;
+        }
 
         if (data.endTime) {
           const endMs = new Date(data.endTime).getTime();
@@ -285,21 +290,22 @@ export default function StudentExamPage() {
       }
 
       // Check violation threshold
-      if (newViolations > Violation_threshold) {
+      const limit = maxViolationsRef.current;
+      if (newViolations > limit) {
         setAutoSubmitReason(
-          `Security violations exceeded the maximum limit of ${Violation_threshold} (${newViolations} total violations recorded). Exam has been autosubmitted.`
+          `Security violations exceeded the maximum limit of ${limit} (${newViolations} total violations recorded). Exam has been autosubmitted.`
         );
         setWarningTitle('VIOLATIONS EXCEEDED (EXAM AUTOSUBMITTING)');
         setWarningMessage(
-          `You have committed ${newViolations} violations. Maximum limit (${Violation_threshold}) exceeded. Your quiz is being automatically submitted now!`
+          `You have committed ${newViolations} violations. Maximum limit (${limit}) exceeded. Your quiz is being automatically submitted now!`
         );
         setShowWarningModal(true);
         submitExam(true, newViolations);
       } else {
-        const remaining = Violation_threshold - newViolations;
-        setWarningTitle(`SECURITY WARNING (${newViolations} OF ${Violation_threshold})`);
+        const remaining = Math.max(0, limit - newViolations);
+        setWarningTitle(`SECURITY WARNING (${newViolations} OF ${limit})`);
         setWarningMessage(
-          `${reason} You have ${remaining} violation${remaining === 1 ? '' : 's'} remaining. If violations exceed ${Violation_threshold}, your quiz will be automatically submitted!`
+          `${reason} You have ${remaining} violation${remaining === 1 ? '' : 's'} remaining. If violations exceed ${limit}, your quiz will be automatically submitted!`
         );
         setShowWarningModal(true);
       }
@@ -595,7 +601,7 @@ export default function StudentExamPage() {
           >
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>
-              Violations: <strong className="font-mono text-white">{violations}</strong>/Violation_threshold
+              Violations: <strong className="font-mono text-white">{violations}</strong> / {maxViolations}
             </span>
           </div>
         </div>

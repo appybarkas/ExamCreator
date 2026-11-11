@@ -1,11 +1,17 @@
 {
   "Bhargav": {
-    "score": 4,
-    "quiz_status": 1
+    "score": 10,
+    "quiz_status": 0,
+    "violations": 0
   },
   "Amulya": {
-    "score": 4,
-    "quiz_status": 1,
-    "violations": 4
+    "score": 2,
+    "quiz_status": 0,
+    "violations": 0
+  },
+  "Aparna": {
+    "score": 0,
+    "quiz_status": 0,
+    "violations": 2
   }
 }

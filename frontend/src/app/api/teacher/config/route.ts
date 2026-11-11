@@ -26,13 +26,19 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { startTime, endTime, title, isCreated } = body;
+    const { startTime, endTime, title, isCreated, maxViolations } = body;
+
+    const parsedMaxViolations =
+      maxViolations !== undefined && maxViolations !== null
+        ? Math.max(1, parseInt(String(maxViolations), 10) || 3)
+        : undefined;
 
     const updated = saveQuizConfig({
       ...(startTime !== undefined && { startTime }),
       ...(endTime !== undefined && { endTime }),
       ...(title !== undefined && { title }),
-      ...(isCreated !== undefined && { isCreated }),
+      ...(isCreated !== undefined && { isCreated: Boolean(isCreated) }),
+      ...(parsedMaxViolations !== undefined && { maxViolations: parsedMaxViolations }),
     });
 
     return NextResponse.json({
@@ -50,4 +56,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

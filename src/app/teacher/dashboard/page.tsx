@@ -21,6 +21,9 @@ import {
   FileCheck,
   ImageIcon,
   ShieldAlert,
+  RotateCcw,
+  Sliders,
+  Check,
 } from 'lucide-react';
 import { QuizQuestion, StudentRecord } from '@/lib/types';
 
@@ -36,11 +39,13 @@ export default function TeacherDashboardPage() {
   const [title, setTitle] = useState('Computer Science Core Assessment');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [maxViolations, setMaxViolations] = useState<number>(3);
   const [isCreated, setIsCreated] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
 
   // Student table state
   const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [resettingUser, setResettingUser] = useState<string | null>(null);
 
   // UI status
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -76,6 +81,11 @@ export default function TeacherDashboardPage() {
           setTitle(configData.config.title || 'Computer Science Core Assessment');
           setStartTime(configData.config.startTime || '');
           setEndTime(configData.config.endTime || '');
+          setMaxViolations(
+            typeof configData.config.maxViolations === 'number' && configData.config.maxViolations > 0
+              ? configData.config.maxViolations
+              : 3
+          );
           setIsCreated(Boolean(configData.config.isCreated));
         }
         if (Array.isArray(configData.questions)) {
@@ -106,8 +116,8 @@ export default function TeacherDashboardPage() {
     router.push('/');
   };
 
-  // Handle "Create Quiz" button click
-  const handleCreateQuiz = async () => {
+  // Handle "Create Quiz" / "Update Populated Quiz" button click
+  const handleCreateOrUpdateQuiz = async () => {
     setSavingConfig(true);
     setFeedback(null);
 
@@ -119,7 +129,8 @@ export default function TeacherDashboardPage() {
           title,
           startTime,
           endTime,
-          isCreated: true, // "A create quiz button when pressed populates the student's dashboard with the question and options"
+          maxViolations: Number(maxViolations) || 3,
+          isCreated: true, // Populated and fixed until updated with a new one
         }),
       });
 
@@ -128,7 +139,7 @@ export default function TeacherDashboardPage() {
         setIsCreated(true);
         setFeedback({
           type: 'success',
-          message: 'Quiz has been created and is now populated on students\' dashboards!',
+          message: 'Quiz populated and set fixed! Students can now access questions with the updated configuration.',
         });
       } else {
         setFeedback({
@@ -140,6 +151,48 @@ export default function TeacherDashboardPage() {
       setFeedback({ type: 'error', message: 'Network error saving quiz configuration.' });
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  // Handle changing student's quiz_status to 0
+  // Requirement: "Also, he can change the quiz_status of any student to 0."
+  const handleResetStudentStatus = async (username: string) => {
+    setResettingUser(username);
+    setFeedback(null);
+
+    try {
+      const res = await fetch('/api/teacher/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, quiz_status: 0 }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStudents((prev) =>
+          prev.map((s) =>
+            s.username.toLowerCase() === username.toLowerCase()
+              ? { ...s, quiz_status: 0, violations: 0 }
+              : s
+          )
+        );
+        setFeedback({
+          type: 'success',
+          message: `Candidate ${username}'s quiz_status changed to 0. They are now eligible to re-attempt the quiz.`,
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          message: data.error || `Failed to reset quiz_status for ${username}`,
+        });
+      }
+    } catch {
+      setFeedback({
+        type: 'error',
+        message: `Network error changing quiz_status for ${username}`,
+      });
+    } finally {
+      setResettingUser(null);
     }
   };
 
@@ -163,9 +216,10 @@ export default function TeacherDashboardPage() {
       const data = await res.json();
       if (res.ok && data.success) {
         setQuestions(data.questions || []);
+        setIsCreated(true);
         setFeedback({
           type: 'success',
-          message: `Successfully processed ${file.name} and loaded ${data.count} questions with figures!`,
+          message: `Successfully uploaded ${file.name} with ${data.count} questions and figures! The newly populated quiz is set fixed and active for students.`,
         });
       } else {
         setFeedback({
@@ -271,7 +325,7 @@ export default function TeacherDashboardPage() {
         <div className="lg:col-span-2 space-y-8">
           {/* Card 1: Schedule & Create Quiz */}
           <div className="rounded-3xl glass-panel p-6 sm:p-8 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                   <Calendar className="w-5 h-5" />
@@ -279,7 +333,7 @@ export default function TeacherDashboardPage() {
                 <div>
                   <h2 className="text-lg font-bold text-white">Quiz Scheduling & Activation</h2>
                   <p className="text-xs text-slate-400">
-                    Define exam window and deploy questions to students
+                    Define exam window, max violations threshold, and deploy questions
                   </p>
                 </div>
               </div>
@@ -288,7 +342,7 @@ export default function TeacherDashboardPage() {
                 {isCreated ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Quiz Created & Active
+                    Quiz Fixed & Active
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30">
@@ -298,7 +352,7 @@ export default function TeacherDashboardPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-6">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-indigo-400" />
@@ -324,29 +378,51 @@ export default function TeacherDashboardPage() {
                   className="w-full px-4 py-3 rounded-xl glass-input text-sm text-slate-200"
                 />
               </div>
+
+              {/* Requirement: The maximum allowed violations can be set from the teacher dashboard */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                  Max Allowed Violations
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={maxViolations}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setMaxViolations(isNaN(val) || val < 1 ? 1 : val);
+                  }}
+                  className="w-full px-4 py-3 rounded-xl glass-input text-sm text-slate-200"
+                  placeholder="3"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Auto-submits when violations exceed {maxViolations}
+                </span>
+              </div>
             </div>
 
             {/* Create Quiz Button (Mandated by requirements) */}
             <div className="pt-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
-                Pressing <strong className="text-slate-200">Create Quiz</strong> activates the exam
-                and immediately populates students&apos; dashboards with questions and radio-button options.
+                Pressing <strong className="text-slate-200">Create Quiz</strong> sets the populated quiz fixed until updated with a new package, and immediately deploys questions to students.
               </p>
               <button
                 type="button"
-                onClick={handleCreateQuiz}
+                onClick={handleCreateOrUpdateQuiz}
                 disabled={savingConfig || questions.length === 0}
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group shrink-0"
               >
                 {savingConfig ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Publishing Quiz...</span>
+                    <span>Publishing & Fixing Quiz...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
-                    <span>Create Quiz & Populate Students</span>
+                    <span>{isCreated ? 'Update & Fix Quiz Configuration' : 'Create Quiz & Populate Students'}</span>
                   </>
                 )}
               </button>
@@ -363,7 +439,7 @@ export default function TeacherDashboardPage() {
                 <div>
                   <h2 className="text-lg font-bold text-white">Upload Quiz Zip Package</h2>
                   <p className="text-xs text-slate-400">
-                    Upload zip file containing <code className="text-purple-300">quiz.json</code> and <code className="text-purple-300">figures</code> folder
+                    Upload new zip containing <code className="text-purple-300">quiz.json</code> and <code className="text-purple-300">figures</code> folder
                   </p>
                 </div>
               </div>
@@ -398,7 +474,7 @@ export default function TeacherDashboardPage() {
                   Click to select or drag and drop <code className="text-indigo-300 font-mono">quiz.zip</code>
                 </div>
                 <p className="text-xs text-slate-400 max-w-sm mb-4">
-                  Stored as <code className="text-indigo-300">./frontend/quiz.zip</code>. Extracts <code className="text-indigo-300">quiz.json</code> and the embedded <code className="text-indigo-300">figures</code> folder.
+                  Stored as <code className="text-indigo-300">./frontend/quiz.zip</code>. Extracts <code className="text-indigo-300">quiz.json</code> and embedded figures. Quiz stays fixed until updated with a new one.
                 </p>
                 <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all">
                   <FileCheck className="w-3.5 h-3.5" />
@@ -413,7 +489,7 @@ export default function TeacherDashboardPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
                     <ListOrdered className="w-4 h-4 text-indigo-400" />
-                    Quiz Questions Loaded ({questions.length})
+                    Populated Questions Fixed ({questions.length})
                   </h3>
                 </div>
 
@@ -484,7 +560,7 @@ export default function TeacherDashboardPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">Student Gradebook</h2>
-                  <p className="text-xs text-slate-400">Live candidate records</p>
+                  <p className="text-xs text-slate-400">Manage candidates and status</p>
                 </div>
               </div>
 
@@ -501,38 +577,70 @@ export default function TeacherDashboardPage() {
             ) : (
               <div className="space-y-3">
                 {students.map((st) => {
-                  const hasGiven = st.quiz_status === 1 || (st.quiz !== null && st.quiz !== undefined && st.quiz > 0);
+                  const hasGiven = st.quiz_status === 1;
+                  const isResetting = resettingUser === st.username;
                   return (
                     <div
                       key={st.username}
-                      className="p-4 rounded-2xl glass-panel border border-white/5 hover:border-cyan-500/30 transition-all flex items-center justify-between gap-3"
+                      className="p-4 rounded-2xl glass-panel border border-white/5 hover:border-cyan-500/30 transition-all flex flex-col gap-3"
                     >
-                      <div>
-                        <div className="font-bold text-white text-sm flex items-center gap-2">
-                          <span>{st.username}</span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-white text-sm flex items-center gap-2">
+                            <span>{st.username}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            Status: {hasGiven ? 'Submitted (Single Attempt Used)' : 'Eligible to Take Quiz'}
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Violations: <span className="text-rose-400 font-mono font-semibold">{st.violations ?? 0}</span> / {maxViolations} max
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          Status: {hasGiven ? 'Completed (Single Attempt Used)' : 'Eligible'}
+
+                        <div className="text-right shrink-0">
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <Award className="w-4 h-4 text-indigo-400" />
+                            <span className="text-base font-extrabold text-white">
+                              {st.quiz !== null && st.quiz !== undefined ? st.quiz : '0'}
+                            </span>
+                            <span className="text-xs text-slate-400">/ {questions.length}</span>
+                          </div>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mt-1 ${
+                              hasGiven
+                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {hasGiven ? 'quiz_status: 1' : 'quiz_status: 0'}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <Award className="w-4 h-4 text-indigo-400" />
-                          <span className="text-base font-extrabold text-white">
-                            {st.quiz !== null && st.quiz !== undefined ? st.quiz : '0'}
-                          </span>
-                          <span className="text-xs text-slate-400">/ {questions.length}</span>
-                        </div>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mt-1 ${
-                            hasGiven
-                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {hasGiven ? 'Submitted (Status 1)' : 'Not Submitted'}
+                      {/* Requirement: Also, he can change the quiz_status of any student to 0 */}
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400">
+                          {hasGiven ? 'Candidate locked out' : 'Candidate ready'}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => handleResetStudentStatus(st.username)}
+                          disabled={isResetting}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                          title="Set candidate quiz_status to 0 to allow re-attempt"
+                        >
+                          {isResetting ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Updating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="w-3 h-3 text-amber-400" />
+                              <span>Set quiz_status to 0</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   );
@@ -541,9 +649,9 @@ export default function TeacherDashboardPage() {
             )}
 
             <div className="mt-6 pt-4 border-t border-white/5 text-[11px] text-slate-400 flex items-center gap-2">
-              <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
+              <HelpCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               <span>
-                Scores automatically record to candidate profile upon submission.
+                Click &quot;Set quiz_status to 0&quot; anytime to unlock exam re-attempts for candidates.
               </span>
             </div>
           </div>

@@ -36,6 +36,7 @@ export interface QuizConfig {
   startTime: string; // ISO string or empty
   endTime: string;   // ISO string or empty
   totalQuestions: number;
+  maxViolations: number; // Configurable max allowed violations
   updatedAt: string;
 }
 

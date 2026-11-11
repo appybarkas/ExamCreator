@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export async function GET(
       path.join(process.cwd(), 'figures'),
       path.join(process.cwd(), 'frontend', 'public', 'figures'),
       path.join(process.cwd(), 'frontend', 'figures'),
+      path.join(os.tmpdir(), 'figures'),
     ];
 
     for (const dir of possibleDirs) {

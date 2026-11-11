@@ -51,7 +51,10 @@ async function startServer() {
 function stopServer() {
   if (serverProcess) {
     console.log('\n🛑 Stopping Next.js test server...');
-    serverProcess.kill('SIGTERM');
+    try {
+      serverProcess.kill('SIGTERM');
+      serverProcess.kill('SIGKILL');
+    } catch {}
   }
 }
 
@@ -134,6 +137,7 @@ async function runTests() {
         endTime: future.toISOString(),
         title: 'Full-Stack Engineering Assessment',
         isCreated: true,
+        maxViolations: 3,
       }),
     });
     const configData = await configRes.json();
@@ -176,10 +180,15 @@ async function runTests() {
 
     console.log('\n--- TEST SUITE 6: Mandatory Answer Submission Validation ---');
     // Rule: "The student must answer all questions to submit the quiz, else he cannot submit"
-    // Reset local submission first so candidate can submit
-    const subFile = path.join(frontendDir, 'submissions.json');
-    if (fs.existsSync(subFile)) {
-      fs.unlinkSync(subFile);
+    // Reset local submissions first so candidates can submit
+    for (const p of [
+      path.join(frontendDir, 'submissions.json'),
+      path.join(rootDir, 'submissions.json'),
+      path.join('/tmp', 'submissions.json'),
+    ]) {
+      if (fs.existsSync(p)) {
+        try { fs.unlinkSync(p); } catch {}
+      }
     }
 
     const partialSubmitRes = await fetch(`${BASE_URL}/api/student/submit`, {
@@ -258,6 +267,76 @@ async function runTests() {
       'Timer zero triggers automatic autosubmit without requiring all questions'
     );
 
+    console.log('\n--- TEST SUITE 9: Configurable Maximum Allowed Violations ---');
+    // Teacher sets max allowed violations to 5
+    const updateViolationsRes = await fetch(`${BASE_URL}/api/teacher/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        maxViolations: 5,
+      }),
+    });
+    const updateViolationsData = await updateViolationsRes.json();
+    assert(
+      updateViolationsRes.ok && updateViolationsData.config.maxViolations === 5,
+      'Teacher can configure maximum allowed violations (set to 5)'
+    );
+
+    const studentQuizWithViolationsRes = await fetch(`${BASE_URL}/api/student/quiz`);
+    const studentQuizWithViolationsData = await studentQuizWithViolationsRes.json();
+    assert(
+      studentQuizWithViolationsData.maxViolations === 5,
+      'Student quiz endpoint returns updated maxViolations (5) configured by teacher'
+    );
+
+    console.log('\n--- TEST SUITE 10: Teacher Changes student quiz_status to 0 ---');
+    // Bhargav was previously locked out with quiz_status = 1
+    const resetStatusRes = await fetch(`${BASE_URL}/api/teacher/students`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Bhargav',
+        quiz_status: 0,
+      }),
+    });
+    const resetStatusData = await resetStatusRes.json();
+    assert(
+      resetStatusRes.ok && resetStatusData.success && resetStatusData.student.quiz_status === 0,
+      'Teacher can change quiz_status of any student to 0'
+    );
+
+    // Verify student status endpoint reflects status 0
+    const checkStatusRes = await fetch(`${BASE_URL}/api/student/status?username=Bhargav`);
+    const checkStatusData = await checkStatusRes.json();
+    assert(
+      checkStatusRes.ok && checkStatusData.quiz_status === 0,
+      'Student status query confirms quiz_status is 0'
+    );
+
+    // Candidate can now submit again!
+    const resubmitRes = await fetch(`${BASE_URL}/api/student/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Bhargav',
+        answers: completeAnswers,
+        isAutoSubmit: false,
+      }),
+    });
+    const resubmitData = await resubmitRes.json();
+    assert(
+      resubmitRes.ok && resubmitData.success && resubmitData.score === 10,
+      'Candidate is allowed to re-attempt and submit quiz after quiz_status changed to 0'
+    );
+
+    console.log('\n--- TEST SUITE 11: Populated Quiz Remains Fixed Until Updated With New One ---');
+    const persistentQuizRes = await fetch(`${BASE_URL}/api/student/quiz`);
+    const persistentQuizData = await persistentQuizRes.json();
+    assert(
+      persistentQuizData.isCreated === true && persistentQuizData.totalQuestions === 10,
+      'Populated quiz remains fixed, active, and accessible with all questions preserved'
+    );
+
   } catch (err) {
     console.error('Test execution error:', err);
     failed++;
@@ -272,6 +351,7 @@ async function runTests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runTests();

@@ -28,6 +28,7 @@ export default function StudentDashboardPage() {
   const [startTime, setStartTime] = useState<string | null>(null);
   const [endTime, setEndTime] = useState<string | null>(null);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [maxViolations, setMaxViolations] = useState(3);
 
   // Load student auth session
   useEffect(() => {
@@ -44,28 +45,53 @@ export default function StudentDashboardPage() {
     }
   }, [router]);
 
-  // Fetch quiz status (polls so when teacher clicks 'Create Quiz', student immediately sees it)
+  // Fetch quiz status & candidate status (polls so when teacher clicks 'Create Quiz' or changes quiz_status to 0, student immediately sees it)
   const checkQuizStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/student/quiz', { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
+      const username = student?.username;
+      const [quizRes, statusRes] = await Promise.all([
+        fetch('/api/student/quiz', { cache: 'no-store' }),
+        username
+          ? fetch(`/api/student/status?username=${encodeURIComponent(username)}`, { cache: 'no-store' })
+          : Promise.resolve(null),
+      ]);
+
+      if (quizRes.ok) {
+        const data = await quizRes.json();
         setIsCreated(Boolean(data.isCreated));
         if (data.title) setTitle(data.title);
         if (data.startTime) setStartTime(data.startTime);
         if (data.endTime) setEndTime(data.endTime);
         if (data.totalQuestions) setTotalQuestions(data.totalQuestions);
+        if (data.maxViolations) setMaxViolations(data.maxViolations);
+      }
+
+      if (statusRes && statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.success) {
+          setStudent((prev) => {
+            if (!prev) return prev;
+            const updated: StudentRecord = {
+              ...prev,
+              quiz_status: statusData.quiz_status,
+              quiz: statusData.quiz,
+              violations: statusData.violations,
+            };
+            localStorage.setItem('student_session', JSON.stringify(updated));
+            return updated;
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching quiz status:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [student?.username]);
 
   useEffect(() => {
     checkQuizStatus();
-    const interval = setInterval(checkQuizStatus, 4000);
+    const interval = setInterval(checkQuizStatus, 3000);
     return () => clearInterval(interval);
   }, [checkQuizStatus]);
 
@@ -98,9 +124,8 @@ export default function StudentDashboardPage() {
   }
 
   // Rule: "His quiz_status will become 1, indicating he has given the quiz and cannot give it again."
-  const hasAlreadyGivenQuiz =
-    student?.quiz_status === 1 ||
-    (student?.quiz !== null && student?.quiz !== undefined && student.quiz > 0);
+  // When teacher resets quiz_status to 0, hasAlreadyGivenQuiz becomes false.
+  const hasAlreadyGivenQuiz = student?.quiz_status === 1;
 
   return (
     <div className="flex-1 flex flex-col p-4 sm:p-8 max-w-4xl mx-auto w-full">
@@ -139,7 +164,8 @@ export default function StudentDashboardPage() {
               {title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Total Questions: <span className="text-white font-bold">{totalQuestions}</span> questions
+              Total Questions: <span className="text-white font-bold">{totalQuestions}</span> questions | Max Allowed Violations:{' '}
+              <span className="text-rose-400 font-bold">{maxViolations}</span>
             </p>
           </div>
 
@@ -150,7 +176,7 @@ export default function StudentDashboardPage() {
                 <span className="text-2xl font-extrabold text-white">
                   Score: {student?.quiz ?? 0} / {totalQuestions}
                 </span>
-                <span className="text-[10px] text-slate-400 block mt-1">Single attempt exhausted</span>
+                <span className="text-[10px] text-slate-400 block mt-1">Single attempt locked</span>
               </div>
             ) : isCreated ? (
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -199,7 +225,7 @@ export default function StudentDashboardPage() {
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-400">
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>Full screen is strictly enforced. You cannot close the application nor open any other tab/window/app until you submit.</span>
+              <span>Full screen is strictly enforced. If violations exceed {maxViolations}, the exam is automatically submitted.</span>
             </li>
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <Clock className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
@@ -211,7 +237,7 @@ export default function StudentDashboardPage() {
             </li>
             <li className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
               <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>After submission, the application securely closes itself. Single attempt only.</span>
+              <span>After submission, the application securely closes itself. Single attempt only unless reset by instructor.</span>
             </li>
           </ul>
         </div>
@@ -219,7 +245,7 @@ export default function StudentDashboardPage() {
         {/* Action Button */}
         {hasAlreadyGivenQuiz ? (
           <div className="p-4 rounded-xl bg-slate-800 text-center text-xs text-slate-300">
-            You have already given this quiz and cannot give it again. Your recorded score is <strong className="text-white">{student?.quiz ?? 0}</strong>.
+            You have already given this quiz. Your recorded score is <strong className="text-white">{student?.quiz ?? 0}</strong>. If permitted, the instructor can set your quiz status to 0 to grant a retake.
           </div>
         ) : isCreated ? (
           <button
